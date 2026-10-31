@@ -1,0 +1,6 @@
+.build/
+dist/
+.swiftpm/
+.DS_Store
+.sign-identity
+PRODUCT.md
