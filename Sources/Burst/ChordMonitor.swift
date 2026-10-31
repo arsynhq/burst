@@ -71,6 +71,10 @@ final class ChordMonitor {
     /// A press that began during a hold: its drag and release are ours too,
     /// even if the keys come up first, so no app ever sees half a click.
     private var holdingPointer = false
+    /// The keys came up mid-drag. Letting go of everything at once often lifts
+    /// the keys a beat before the button: the session waits for that release
+    /// so the last grab still lands, then drops.
+    private var releasePending = false
 
     var isRunning: Bool { tap != nil }
 
@@ -123,6 +127,7 @@ final class ChordMonitor {
             guard holdingPointer else { return false }
             holdingPointer = false
             if state == .active { delegate?.pointerUp(Self.cocoa(event.location)) }
+            if releasePending { end { $0.chordReleased() } }
             return true
         case .rightMouseDown, .otherMouseDown:
             if state == .armed { disarm(to: .spent) }
@@ -146,9 +151,11 @@ final class ChordMonitor {
         case .active:
             guard held.contains(chord.flags) else {
                 wheelKeyDownAt = nil
-                end { $0.chordReleased() }
+                if holdingPointer { holdUntilPointerUp() } else { end { $0.chordReleased() } }
                 return
             }
+            // Keys back down before the button came up: the hold goes on.
+            releasePending = false
             let recording = held.contains(chord.recordKey)
             if recording != recordHeld {
                 recordHeld = recording
@@ -236,8 +243,15 @@ final class ChordMonitor {
         watchdog?.invalidate()
         watchdog = nil
         recordHeld = false
+        releasePending = false
         state = next
         if let delegate { notify(delegate) }
+    }
+
+    private func holdUntilPointerUp() {
+        guard !releasePending else { return }
+        releasePending = true
+        burstLog.info("keys up mid-drag: finishing the grab before the drop")
     }
 
     /// Belt and braces: if the tap ever misses the release (secure input, a
@@ -247,7 +261,17 @@ final class ChordMonitor {
             MainActor.assumeIsolated {
                 guard let self, self.state == .active else { return }
                 let held = CGEventSource.flagsState(.combinedSessionState).intersection(Chord.relevant)
-                if !held.contains(self.chord.flags) { self.end { $0.chordReleased() } }
+                guard !held.contains(self.chord.flags) else { return }
+                if !self.holdingPointer { self.end { $0.chordReleased() }; return }
+                self.holdUntilPointerUp()
+                // The button is already up but the tap never saw it: finish the
+                // grab where the pointer is rather than lose it.
+                if !CGEventSource.buttonState(.combinedSessionState, button: .left) {
+                    burstLog.error("missed the button release: finishing the grab at the pointer")
+                    self.holdingPointer = false
+                    self.delegate?.pointerUp(NSEvent.mouseLocation)
+                    self.end { $0.chordReleased() }
+                }
             }
         }
     }
