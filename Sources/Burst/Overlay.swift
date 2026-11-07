@@ -17,6 +17,10 @@ final class OverlayWindow: NSPanel {
         ignoresMouseEvents = true
         isReleasedWhenClosed = false
         animationBehavior = .none
+        // Never part of anyone's capture: ScreenCaptureKit's app exclusion
+        // depends on a content snapshot taken before these windows exist, so a
+        // mid-flight pile card could be baked into the next grab.
+        sharingType = .none
         appearance = NSAppearance(named: .darkAqua)
     }
 

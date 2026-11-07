@@ -236,6 +236,7 @@ private final class BorderPanel: NSPanel {
         hasShadow = false
         ignoresMouseEvents = true
         isReleasedWhenClosed = false
+        sharingType = .none          // the red frame is never in the video
         let view = NSView(frame: CGRect(origin: .zero, size: frame.size))
         view.wantsLayer = true
         view.layer?.borderColor = Look.recordRed.cgColor
@@ -262,6 +263,7 @@ final class ClickPanel<Content: View>: NSPanel {
         backgroundColor = .clear
         hasShadow = true
         isReleasedWhenClosed = false
+        sharingType = .none          // controls and toasts stay out of captures
         host.frame = CGRect(origin: .zero, size: size)
         contentView = host
     }
